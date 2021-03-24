@@ -1,0 +1,171 @@
+
+package com.aver.averptz.Util;
+
+import android.content.Context;
+import android.content.res.TypedArray;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
+import android.util.AttributeSet;
+import android.widget.ProgressBar;
+
+import com.aver.averptz.R;
+
+/**
+ * Created by chengww on 2018/11/14.
+ */
+public class CircleProgressBar extends ProgressBar {
+    private int mDefaultColor;
+    private int mReachedColor;
+    private float mDefaultHeight;
+    private float mReachedHeight;
+    private float mRadius;
+    private Paint mPaint;
+
+    private Status mStatus = Status.Waiting;
+
+    public CircleProgressBar(Context context) {
+        this(context, null);
+    }
+
+    public CircleProgressBar(Context context, AttributeSet attrs) {
+        this(context, attrs, 0);
+    }
+
+    public CircleProgressBar(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        TypedArray typedArray = context.obtainStyledAttributes(attrs, R.styleable.CircleProgressBar);
+        //默認圓的顏色
+        mDefaultColor = typedArray.getColor(R.styleable.CircleProgressBar_defaultColor, Color.parseColor("#D8D8D8"));
+        //進度條的顏色
+        mReachedColor = typedArray.getColor(R.styleable.CircleProgressBar_reachedColor, Color.parseColor("#1296DB"));
+        //默認圓的高度
+        mDefaultHeight = typedArray.getDimension(R.styleable.CircleProgressBar_defaultHeight, dp2px(context, 2.5f));
+        //進度條的高度
+        mReachedHeight = typedArray.getDimension(R.styleable.CircleProgressBar_reachedHeight, dp2px(context, 2.5f));
+        //圓的半徑
+        mRadius = typedArray.getDimension(R.styleable.CircleProgressBar_radius, dp2px(context, 17));
+        typedArray.recycle();
+
+        setPaint();
+    }
+
+    private void setPaint() {
+        mPaint = new Paint();
+        //下面是設置畫筆的一些屬性
+        mPaint.setAntiAlias(true);//抗鋸齒
+        mPaint.setDither(true);//防抖動，繪製出來的圖要更加柔和清晰
+        mPaint.setStyle(Paint.Style.STROKE);//設置填充樣式
+        /**
+         *  Paint.Style.FILL    :填充內部
+         *  Paint.Style.FILL_AND_STROKE  ：填充內部和描邊
+         *  Paint.Style.STROKE  ：僅描邊
+         */
+        mPaint.setStrokeCap(Paint.Cap.ROUND);//設置畫筆筆刷類型
+    }
+
+    @Override
+    protected synchronized void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+
+        int widthMode = MeasureSpec.getMode(widthMeasureSpec);
+        int heightMode = MeasureSpec.getMode(heightMeasureSpec);
+
+        float paintHeight = Math.max(mReachedHeight, mDefaultHeight);//比較兩數，取最大值
+
+        if (heightMode != MeasureSpec.EXACTLY) {
+            //如果用戶沒有精確指出寬高時，我們就要測量整個View所需要分配的高度了，測量自訂圓形View設置的上下內邊距+圓形view的直徑+圓形描邊邊框的高度
+            int exceptHeight = (int) (getPaddingTop() + getPaddingBottom() + mRadius * 2 + paintHeight);
+            //然後再將測量後的值作為精確值傳給父類，告訴他我需要這麼大的空間，你給我分配吧
+            heightMeasureSpec = MeasureSpec.makeMeasureSpec(exceptHeight, MeasureSpec.EXACTLY);
+        }
+        if (widthMode != MeasureSpec.EXACTLY) {
+            //這裡在自訂屬性中沒有設置圓形邊框的寬度，所以這裡直接用高度代替
+            int exceptWidth = (int) (getPaddingLeft() + getPaddingRight() + mRadius * 2 + paintHeight);
+            widthMeasureSpec = MeasureSpec.makeMeasureSpec(exceptWidth, MeasureSpec.EXACTLY);
+        }
+
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+    }
+
+    @Override
+    protected synchronized void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+
+        /**
+         * 這裡canvas.save();和canvas.restore();是兩個相互匹配出現的，作用是用來保存畫布的狀態和取出保存的狀態的
+         * 當我們對畫布進行旋轉，縮放，平移等操作的時候其實我們是想對特定的元素進行操作,但是當你用canvas的方法來進行這些操作的時候，其實是對整個畫布進行了操作，
+         * 那麼之後在畫布上的元素都會受到影響，所以我們在操作之前調用canvas.save()來保存畫布當前的狀態，當操作之後取出之前保存過的狀態，
+         * (比如：前面元素設置了平移或旋轉的操作後，下一個元素在進行繪製之前執行了canvas.save();和canvas.restore()操作)這樣後面的元素就不會受到(平移或旋轉的)影響
+         */
+        canvas.save();
+        //為了保證最外層的圓弧全部顯示，我們通常會設置自訂view的padding屬性，這樣就有了內邊距，所以畫筆應該平移到內邊距的位置，這樣畫筆才會剛好在最外層的圓弧上
+        //畫筆平移到指定paddingLeft， getPaddingTop()位置
+        canvas.translate(getPaddingStart(), getPaddingTop());
+
+        int mDiameter = (int) (mRadius * 2);
+        if (mStatus == Status.Loading) {
+            mPaint.setStyle(Paint.Style.STROKE);
+            //畫默認圓(邊框)的一些設置
+            mPaint.setColor(mDefaultColor);
+            mPaint.setStrokeWidth(mDefaultHeight);
+            canvas.drawCircle(mRadius, mRadius, mRadius, mPaint);
+
+            //畫進度條的一些設置
+            mPaint.setColor(mReachedColor);
+            mPaint.setStrokeWidth(mReachedHeight);
+            //根據進度繪製圓弧
+            float sweepAngle = getProgress() * 1.0f / getMax() * 360;
+            canvas.drawArc(new RectF(0, 0, mRadius * 2, mRadius * 2), -90, sweepAngle, false, mPaint);
+
+            mPaint.setStyle(Paint.Style.STROKE);
+            mPaint.setStrokeWidth(dp2px(getContext(), 2));
+            mPaint.setColor(Color.parseColor("#667380"));
+            //canvas.drawLine(mRadius * 4 / 5, mRadius * 3 / 4, mRadius * 4 / 5, 2 * mRadius - (mRadius * 3 / 4), mPaint);
+            //canvas.drawLine(2 * mRadius - (mRadius * 4 / 5), mRadius * 3 / 4, 2 * mRadius - (mRadius * 4 / 5), 2 * mRadius - (mRadius * 3 / 4), mPaint);
+        } else {
+            int drawableInt = 0;
+            switch (mStatus) {
+                case Waiting:
+                default:
+                    //drawableInt = R.mipmap.ic_waiting;
+                    break;
+                case Pause:
+                    //drawableInt = R.mipmap.ic_pause;
+                    break;
+                case Finish:
+                    //drawableInt = R.mipmap.ic_finish;
+                    break;
+                case Error:
+                    //drawableInt = R.mipmap.ic_error;
+                    break;
+            }
+
+        }
+        canvas.restore();
+    }
+
+    public Status getStatus() {
+        return mStatus;
+    }
+
+    public void setStatus(Status status) {
+        mStatus = status;
+        invalidate();
+    }
+
+    public enum Status {
+        Waiting,
+        Pause,
+        Loading,
+        Error,
+        Finish
+    }
+
+    float dp2px(Context context, float dp) {
+        final float scale = context.getResources().getDisplayMetrics().density;
+        return dp * scale + 0.5f;
+    }
+}
+
