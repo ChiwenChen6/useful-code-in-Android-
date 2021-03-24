@@ -1,0 +1,9 @@
+
+        long startTime = System.nanoTime();  //開始時間
+        //
+        //   這裡是你要測量的程式碼
+        //
+        long consumingTime = System.nanoTime() - startTime; //消耗時間
+        //consumingTime就是你所測試的程式碼的執行時間,你可以通過如下的Java輸出命令來輸出這個值
+        System.out.println(consumingTime);
+        System.out.println(consumingTime/1000+"微秒";
